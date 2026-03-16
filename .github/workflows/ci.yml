@@ -113,11 +113,11 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/turbocache-linux-amd64
-            release/turbocache-linux-arm64
-            release/turbocache-darwin-amd64
-            release/turbocache-darwin-arm64
-            release/turbocache-windows-amd64.exe
+            release/turbocache-linux-amd64/turbocache-linux-amd64
+            release/turbocache-linux-arm64/turbocache-linux-arm64
+            release/turbocache-darwin-amd64/turbocache-darwin-amd64
+            release/turbocache-darwin-arm64/turbocache-darwin-arm64
+            release/turbocache-windows-amd64.exe/turbocache-windows-amd64.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

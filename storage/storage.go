@@ -255,7 +255,7 @@ func (s *Storage) scanArtifactsLocked() ([]artifactEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 
 	files, err := dir.Readdir(-1)
 	if err != nil {

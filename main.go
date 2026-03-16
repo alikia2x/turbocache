@@ -73,5 +73,8 @@ func main() {
 		printInfo("  Evict batch: %d", cfg.EvictBatch)
 	}
 
-	_ = r.Run(":" + cfg.Port)
+	if err := r.Run(":" + cfg.Port); err != nil {
+		printWarning("Server failed to start: %v", err)
+		os.Exit(1)
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"turbocache/models"
 )
@@ -14,6 +15,8 @@ import (
 type Storage struct {
 	cacheDir     string
 	mu           sync.RWMutex
+	evictMu      sync.Mutex
+	evictRunning atomic.Bool
 	maxSizeMB    int64
 	maxCount     int
 	evictBatch   int
@@ -90,11 +93,11 @@ func (s *Storage) SaveMetadata(hash string, meta *models.ArtifactMetadata) error
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.metadataPath(hash), data, 0644)
+	return os.WriteFile(s.metadataPath(hash), data, 0600)
 }
 
 func (s *Storage) Save(hash string, data []byte, meta *models.ArtifactMetadata) error {
-	if err := os.WriteFile(s.artifactPath(hash), data, 0644); err != nil {
+	if err := os.WriteFile(s.artifactPath(hash), data, 0600); err != nil {
 		return err
 	}
 	if meta != nil {
@@ -110,6 +113,16 @@ func (s *Storage) TryEvict() {
 	if !s.EvictionEnabled() {
 		return
 	}
+
+	// Prevent concurrent eviction runs
+	if !s.evictRunning.CompareAndSwap(false, true) {
+		return
+	}
+	defer s.evictRunning.Store(false)
+
+	s.evictMu.Lock()
+	defer s.evictMu.Unlock()
+
 	s.mu.RLock()
 	maxSize := s.maxSizeMB
 	maxCount := s.maxCount
@@ -169,38 +182,8 @@ type artifactEntry struct {
 }
 
 func (s *Storage) GetAllArtifacts() ([]artifactEntry, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	entries := []artifactEntry{}
-
-	dir, err := os.Open(s.cacheDir)
-	if err != nil {
-		return nil, err
-	}
-	defer dir.Close()
-
-	files, err := dir.Readdir(-1)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-		name := f.Name()
-		if len(name) > 4 && name[len(name)-4:] == ".meta" {
-			continue
-		}
-		entries = append(entries, artifactEntry{
-			hash:    name,
-			size:    f.Size(),
-			modTime: f.ModTime().UnixNano(),
-		})
-	}
-
-	return entries, nil
+	// Release lock before I/O to avoid blocking other operations
+	return s.scanArtifactsLocked()
 }
 
 func (s *Storage) GetCacheStats() (totalSize int64, count int, err error) {

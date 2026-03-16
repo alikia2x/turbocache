@@ -67,3 +67,29 @@ jobs:
         with:
           name: binary
           path: bin/turbocache
+
+  release:
+    name: Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: binary
+          path: .
+
+      - name: Make binary executable
+        run: chmod +x turbocache
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: turbocache
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

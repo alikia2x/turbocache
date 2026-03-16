@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -26,7 +26,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage.out
@@ -36,39 +36,58 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
 
   build:
-    name: Build
+    name: Build (${{ matrix.os }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux-amd64, linux-arm64, darwin-amd64, darwin-arm64, windows-amd64]
+        include:
+          - os: linux-amd64
+            artifact_name: turbocache-linux-amd64
+          - os: linux-arm64
+            artifact_name: turbocache-linux-arm64
+          - os: darwin-amd64
+            artifact_name: turbocache-darwin-amd64
+          - os: darwin-arm64
+            artifact_name: turbocache-darwin-arm64
+          - os: windows-amd64
+            artifact_name: turbocache-windows-amd64.exe
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Build
-        run: go build -v -o bin/turbocache .
+        run: |
+          ext=""
+          if [ "${{ matrix.os }}" = "windows-amd64" ]; then
+            ext=".exe"
+          fi
+          go build -v -o bin/${{ matrix.os }}${ext} .
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: binary
-          path: bin/turbocache
+          name: ${{ matrix.artifact_name }}
+          path: bin/${{ matrix.os }}${{ matrix.os == 'windows-amd64' && '.exe' || '' }}
 
   release:
     name: Release
@@ -79,21 +98,26 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Download binary
-        uses: actions/download-artifact@v4
+      - name: Download all binaries
+        uses: actions/download-artifact@v7
         with:
-          name: binary
-          path: .
+          path: release
 
-      - name: Make binary executable
-        run: chmod +x turbocache
+      - name: Make binaries executable
+        run: |
+          find release -type f -name "turbocache-*" -exec chmod +x {} \;
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: turbocache
+          files: |
+            release/turbocache-linux-amd64
+            release/turbocache-linux-arm64
+            release/turbocache-darwin-amd64
+            release/turbocache-darwin-arm64
+            release/turbocache-windows-amd64.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
